@@ -1,2 +1,5 @@
 requests
 fpdf2
+pymongo
+certifi
+python-dotenv

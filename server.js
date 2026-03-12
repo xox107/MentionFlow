@@ -3,6 +3,7 @@ const cors = require('cors');
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 app.use(cors());
@@ -10,7 +11,11 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
 
-// 1. Route to Trigger Scraper
+
+const MONGO_URI = process.env.MONGO_URI || "mongodb://erthirukumaran_db_user:Thiru1234@ac-fmw4blu-shard-00-00.l358pfx.mongodb.net:27017/MentionFlow?ssl=true&authSource=admin&directConnection=true";
+const client = new MongoClient(MONGO_URI);
+
+
 app.get('/api/scrape', (req, res) => {
     console.log("📥 Scrape request received...");
     const scriptPath = path.join(__dirname, 'scraper.py');
@@ -19,7 +24,9 @@ app.get('/api/scrape', (req, res) => {
     if (process.env.RENDER) {
         pythonCmd = "python3";
     } else {
-        const venvPython = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
+       
+        const venvPath = fs.existsSync(path.join(__dirname, 'venv')) ? 'venv' : '.venv';
+        const venvPython = path.join(__dirname, venvPath, 'Scripts', 'python.exe');
         if (fs.existsSync(venvPython)) pythonCmd = `"${venvPython}"`;
     }
 
@@ -33,40 +40,30 @@ app.get('/api/scrape', (req, res) => {
     });
 });
 
-// 2. Route to Fetch Results (FIXED: endsWith corrected)
-app.get('/api/results', (req, res) => {
-    try {
-        const files = fs.readdirSync(__dirname).filter(f => 
-            typeof f === 'string' && f.startsWith('results_') && f.endsWith('.json')
-        );
-        
-        if (files.length === 0) {
-            return res.json([]);
-        }
 
-        let allData = [];
-        files.forEach(file => {
-            try {
-                const fileData = fs.readFileSync(path.join(__dirname, file), 'utf8');
-                const content = JSON.parse(fileData);
-                if (Array.isArray(content)) allData.push(...content);
-            } catch (e) {
-                console.error(`⚠️ Skipping corrupted file: ${file}`);
-            }
-        });
+app.get('/api/results', async (req, res) => {
+    try {
+        await client.connect();
+        const database = client.db('MentionFlowDB');
+        const mentions = database.collection('mentions');
+        
+        const allData = await mentions.find({}).sort({ extracted_at: -1 }).toArray();
+        
+        console.log(`📡 Fetched ${allData.length} items from MongoDB Atlas.`);
         res.json(allData);
     } catch (err) {
-        console.error("❌ Results Error:", err);
-        res.status(500).json([]);
+        console.error("❌ MongoDB Results Error:", err);
+        res.status(500).json({ error: "Database fetch failed" });
     }
 });
 
-// 3. PDF Route
+
 app.get('/api/download-pdf', (req, res) => {
     const reporterPath = path.join(__dirname, 'reporter.py');
     let pythonCmd = process.env.RENDER ? "python3" : "python";
     if (!process.env.RENDER) {
-        const venvPython = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
+        const venvPath = fs.existsSync(path.join(__dirname, 'venv')) ? 'venv' : '.venv';
+        const venvPython = path.join(__dirname, venvPath, 'Scripts', 'python.exe');
         if (fs.existsSync(venvPython)) pythonCmd = `"${venvPython}"`;
     }
     exec(`${pythonCmd} "${reporterPath}"`, (error) => {
@@ -77,7 +74,7 @@ app.get('/api/download-pdf', (req, res) => {
     });
 });
 
-// 4. Static Assets & Catch-all
+
 app.use(express.static(__dirname));
 app.get(/^\/(.*)/, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));

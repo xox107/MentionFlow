@@ -1,15 +1,22 @@
 import pymongo
 import certifi
 import sys
+import os
 from datetime import datetime
-MONGO_URI = "mongodb://erthirukumaran_db_user:Thiru1234@ac-fmw4blu-shard-00-00.l358pfx.mongodb.net:27017/MentionFlow?ssl=true&authSource=admin&directConnection=true"
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://erthirukumaran_db_user:Thiru1234@cluster0.l358pfx.mongodb.net/MentionFlowDB?retryWrites=true&w=majority")
+
 db = None
 posts_collection = None
 
 try:
-    print("Connecting to MongoDB Atlas...")
+    print("--- Connecting to MongoDB Atlas ---")
     
-   
+    
     client = pymongo.MongoClient(
         MONGO_URI,
         tlsCAFile=certifi.where(),
@@ -19,23 +26,24 @@ try:
     
     client.admin.command('ping')
     
+   
     db = client['MentionFlowDB']
     posts_collection = db['mentions']
     
-    print("✅ Connection Successful!")
+    print("SUCCESS: Database connection established.")
 
 except Exception as e:
-    print(f"❌ Still failing: {e}")
-    print("\n💡 Troubleshooting Tip: Check if your IP is whitelisted and if your password is correct.")
+    
+    print(f"CRITICAL ERROR: Could not connect to MongoDB. Details: {e}")
     sys.exit(1)
 
 def save_posts_to_db(posts, search_query):
     """
     Saves or updates LinkedIn posts in the database.
-    Prevents duplicates by using the post URL as a unique key.
+    Prevents duplicates by using the post URL as a unique key (Upsert).
     """
     if posts_collection is None:
-        print("❌ Database not initialized. Cannot save.")
+        print("ERROR: Database not initialized. Cannot save data.")
         return
 
     count = 0
@@ -51,21 +59,26 @@ def save_posts_to_db(posts, search_query):
             "status": "new"
         }
         
+        
         if not post_data["link"]:
             continue
 
-        
-        result = posts_collection.update_one(
-            {"link": post_data["link"]},
-            {"$set": post_data},
-            upsert=True
-        )
-        
-        if result.upserted_id or result.modified_count > 0:
-            count += 1
+       
+        try:
+            result = posts_collection.update_one(
+                {"link": post_data["link"]},
+                {"$set": post_data},
+                upsert=True
+            )
             
-    print(f"📂 DB Sync: {count} posts updated/inserted for query: '{search_query}'")
+            
+            if result.upserted_id or result.modified_count > 0:
+                count += 1
+        except Exception as write_error:
+            print(f"Minor Error saving post: {write_error}")
+            
+    print(f"DATABASE SYNC: {count} new or updated posts added for query: '{search_query}'")
 
-n
 if __name__ == "__main__":
-    print("Testing database module...")
+    print("Database module test run...")
+  
