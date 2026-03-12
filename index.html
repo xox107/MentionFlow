@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MentionFlow | Social Intelligence Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+    .line-clamp-3 {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        /* Add the line below to fix the warning */
+        line-clamp: 3; 
+        -webkit-box-orient: vertical;  
+        overflow: hidden;
+    }
+</style>
+        
+    </style>
+</head>
+<body class="bg-[#0f172a] text-slate-200 font-sans min-h-screen">
+
+    <div class="max-w-6xl mx-auto p-6 md:p-12">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 border-b border-slate-800 pb-8">
+            <div>
+                <h1 class="text-4xl font-extrabold text-white tracking-tight">MentionFlow</h1>
+                <p class="text-slate-500 mt-2 flex items-center">
+                    <span class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse mr-2"></span>
+                    Target: Shayak Mazumder & Adya AI
+                </p>
+            </div>
+            
+            <div class="flex gap-4 mt-6 md:mt-0">
+                <button onclick="runScan()" id="scanBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-6 rounded-lg transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
+                    New Scan
+                </button>
+                <button onclick="downloadPDF()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-6 rounded-lg border border-slate-700 transition-all active:scale-95">
+                    Export PDF
+                </button>
+            </div>
+        </header>
+
+        <div id="statusBox" class="hidden mb-8 p-4 bg-indigo-900/20 border border-indigo-500/30 rounded-xl">
+            <p id="statusText" class="text-indigo-300 text-sm font-mono flex items-center">
+                <svg class="animate-spin h-4 w-4 mr-3 text-indigo-400" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                System engaged... Scraper is searching LinkedIn.
+            </p>
+        </div>
+
+        <div id="grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            </div>
+    </div>
+
+    <script>
+        // SMART API DETECTION
+        // If we are on localhost, talk to port 5000. 
+        // If deployed, talk to the current URL origin.
+        const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+            ? "http://localhost:5000" 
+            : window.location.origin;
+
+        async function loadResults() {
+            const grid = document.getElementById('grid');
+            try {
+                const res = await fetch(`${API_BASE}/api/results`);
+                if (!res.ok) throw new Error("API Offline");
+                
+                const data = await res.json();
+                
+                if (!data || data.length === 0) {
+                    grid.innerHTML = `
+                        <div class="col-span-full text-center py-20 bg-slate-800/20 border-2 border-dashed border-slate-800 rounded-3xl">
+                            <p class="text-slate-500 italic">No intelligence gathered yet.</p>
+                            <p class="text-xs text-slate-600 mt-2 font-mono">Trigger a "New Scan" to crawl LinkedIn for mentions.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                grid.innerHTML = data.map(post => `
+                    <div class="bg-[#1e293b] p-6 rounded-2xl border border-slate-700/50 flex flex-col hover:border-indigo-500/50 transition-all group shadow-xl">
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="bg-indigo-900/40 text-indigo-400 text-[10px] font-black px-2 py-1 rounded tracking-widest uppercase">LinkedIn</span>
+                        </div>
+                        <h3 class="font-bold text-lg mb-3 text-slate-100 group-hover:text-indigo-300 transition-colors leading-snug">${post.title || 'Mention Detected'}</h3>
+                        <p class="text-sm text-slate-400 mb-8 flex-grow line-clamp-3 leading-relaxed">"${post.snippet || 'No snippet available for this post.'}"</p>
+                        <div class="mt-auto">
+                            <a href="${post.link}" target="_blank" class="inline-flex items-center text-indigo-400 font-bold text-sm hover:text-indigo-300 transition-colors">
+                                Open Original Post
+                                <svg class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error("UI Load Error:", e);
+                grid.innerHTML = `<p class="col-span-full text-center text-red-400 font-mono">Error: Could not connect to backend at ${API_BASE}</p>`;
+            }
+        }
+
+        async function runScan() {
+            const btn = document.getElementById('scanBtn');
+            const statusBox = document.getElementById('statusBox');
+            
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            statusBox.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/scrape`);
+                if (!response.ok) throw new Error("Scraper Failed");
+                
+                await loadResults();
+            } catch (err) {
+                alert("Scraper Error: Check if server is running.");
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                statusBox.classList.add('hidden');
+            }
+        }
+
+        function downloadPDF() {
+            window.location.href = `${API_BASE}/api/download-pdf`;
+        }
+
+        // Auto-load on entry
+        loadResults();
+    </script>
+</body>
+</html>

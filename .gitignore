@@ -1,0 +1,13 @@
+# Local environments
+node_modules/
+venv/
+__pycache__/
+.env
+
+# Data files (Don't upload your private scan results)
+results_*.json
+MentionFlow_Full_Report.pdf
+
+# System files
+.DS_Store
+Thumbs.db
