@@ -12,7 +12,7 @@ if sys.stdout.encoding != 'utf-8':
         pass
 
 
-API_KEY = "60cdc13e66b32a43b6e4318bc59dc18a1cadb56c"
+API_KEY = os.getenv("SERPER_API_KEY", "60cdc13e66b32a43b6e4318bc59dc18a1cadb56c")
 URL = "https://google.serper.dev/search"
 
 def wipe_data():
